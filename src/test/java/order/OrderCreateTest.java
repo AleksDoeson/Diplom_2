@@ -57,11 +57,13 @@ public class OrderCreateTest {
     @Description("Попытка создания заказа без авторизации")
     public void createOrderWithoutAuthTest() {
         String orderDetails = "{\"ingredients\": " + ingredients + "}";
-        Steps.createOrder(null, orderDetails)
+        Steps.createOrder("", orderDetails)
                 .then()
+                .log().all()  // <-- вот здесь
                 .statusCode(401)
                 .body("message", equalTo(Constants.USER_NOTAUTHORISED_ERROR));
     }
+
 
     @Test
     @Step("Создание заказа с ингредиентами")
