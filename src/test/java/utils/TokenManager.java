@@ -1,17 +1,29 @@
 package utils;
 
+import io.qameta.allure.Step;
 import io.restassured.response.Response;
 
 public class TokenManager {
 
-    // Метод для получения валидного токена пользователя
+    @Step("Получение токена для валидного пользователя из Constants")
     public static String getValidToken() {
-        // Для тестов обычно отправляется запрос на логин, чтобы получить токен
-        Response response = Steps.loginUser(Constants.VALID_EMAIL, Constants.VALID_PASSWORD);
+        UserModel user = new UserModel(Constants.VALID_EMAIL, Constants.VALID_PASSWORD, Constants.USER_NAME);
+        return getToken(user);
+    }
 
-        // Извлекаем токен из ответа
-        return response.jsonPath().getString("accessToken");
+    @Step("Получение токена для пользователя")
+    public static String getToken(UserModel user) {
+        Response response = Steps.loginUser(user);
+        String token = response.jsonPath().getString("accessToken");
+        if (token != null) {
+            return token.replace("Bearer ", "");
+        } else {
+            return null;
+        }
     }
 }
+
+
+
 
 

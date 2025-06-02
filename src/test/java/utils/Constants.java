@@ -25,8 +25,6 @@ public class Constants {
     public static final String VALID_PASSWORD = "Kdepapa1?";
     public static final String USER_NAME = "TestUser";
     public static final String DEFAULT_USER_PASSWORD = "password123";
-
-
     // Множество сообщений об ошибках
     public static final String USER_NOTAUTHORISED_ERROR = "You should be authorised";
     public static final String INVALID_CREDENTIALS_ERROR = "email or password are incorrect";

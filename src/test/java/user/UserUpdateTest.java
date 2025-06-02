@@ -1,127 +1,133 @@
 package user;
 
-import io.qameta.allure.Step;
 import io.qameta.allure.Description;
+import io.qameta.allure.junit4.DisplayName;
 import io.restassured.response.Response;
+import org.apache.http.HttpStatus;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-import utils.Constants;
-import utils.TokenManager;
-import utils.Steps;
-import utils.UserGenerator;
+import utils.*;
 
 import static org.hamcrest.Matchers.*;
 
 public class UserUpdateTest {
 
+    private UserModel originalUser;
     private String token;
-    private final String newName = "UpdatedUserName";
-    private String email;
-    private final String password = Constants.DEFAULT_USER_PASSWORD;
 
     @Before
-    @Step("Получение токена")
-    @Description("Получение токена")
     public void setUp() {
-        email = UserGenerator.generateUniqueEmail();
-        String name = Constants.USER_NAME;
-        Response response = Steps.registerNewUser(email, password, name);
-        response.then().statusCode(200);
-        token = response.path("accessToken").toString().replace("Bearer ", "");
+        originalUser = UserGenerator.generateRandomUser();
+        Response response = Steps.registerNewUser(originalUser);
+        response.then().statusCode(HttpStatus.SC_OK);
+
+        token = response.then().extract().path("accessToken").toString();
+        if (token.startsWith("Bearer ")) {
+            token = token.substring(7);
+        }
+
     }
 
     @After
-    @Step("Удаление пользователя после теста")
-    @Description("Удаление пользователя после теста")
-    public void cleanUp() {
+    public void tearDown() {
         if (token != null) {
             Steps.deleteUser(token);
         }
     }
 
     @Test
-    @Step("Обновление имени пользователя с авторизацией")
-    @Description("Обновление имени пользователя с авторизацией")
+    @DisplayName("Обновление имени пользователя с авторизацией")
+    @Description("Проверка успешного обновления имени пользователя с токеном")
     public void updateNameWithAuthTest() {
-        Steps.updateUser(token, newName, null, null)
+        UserModel updatedUser = new UserModel(
+                originalUser.getEmail(),  // текущий email обязательно
+                null,
+                UserGenerator.generateRandomName()
+        );
+
+        Steps.updateUser(token, updatedUser)
                 .then()
-                .statusCode(200)
+                .log().all()
+                .statusCode(HttpStatus.SC_OK)
                 .body("success", equalTo(true))
-                .body("user.name", equalTo(newName));
+                .body("user.name", equalTo(updatedUser.getName()));
     }
 
     @Test
-    @Step("Обновление email пользователя с авторизацией")
-    @Description("Обновление email пользователя с авторизацией")
+    @DisplayName("Обновление email пользователя с авторизацией")
+    @Description("Проверка успешного обновления email пользователя с токеном")
     public void updateEmailWithAuthTest() {
-        String newEmail = UserGenerator.generateUniqueEmail();
-        Steps.updateUser(token, null, newEmail, null)
+        UserModel updatedUser = new UserModel(
+                UserGenerator.generateUniqueEmail(),
+                "",
+                ""
+        );
+
+        Steps.updateUser(token, updatedUser)
                 .then()
-                .statusCode(200)
+                .statusCode(HttpStatus.SC_OK)
                 .body("success", equalTo(true))
-                .body("user.email", equalTo(newEmail.toLowerCase()));
+                .body("user.email", equalTo(updatedUser.getEmail().toLowerCase()));
     }
 
     @Test
-    @Step("Обновление пароля пользователя с авторизацией")
-    @Description("Обновление пароля пользователя с авторизацией")
+    @DisplayName("Обновление пароля пользователя с авторизацией")
+    @Description("Проверка успешного обновления пароля пользователя с токеном")
     public void updatePasswordWithAuthTest() {
-        String newPassword = "NewPassword123";
-        Steps.updateUser(token, null, null, newPassword)
+        UserModel updatedUser = new UserModel(
+                originalUser.getEmail(),  // передаем текущий email обязательно
+                UserGenerator.generateRandomPassword(),
+                null
+        );
+
+        Steps.updateUser(token, updatedUser)
                 .then()
-                .statusCode(200)
+                .log().all()
+                .statusCode(HttpStatus.SC_OK)
                 .body("success", equalTo(true));
-        // Можно добавить логин с новым паролем для подтверждения
+        // Можно дополнительно залогиниться с новым паролем для проверки
     }
 
     @Test
-    @Step("Попытка обновления имени пользователя без авторизации")
-    @Description("Попытка обновления имени пользователя без авторизации")
-    public void updateNameWithoutAuthTest() {
-        Steps.updateUser(null, newName, null, null)
+    @DisplayName("Попытка обновления данных без авторизации")
+    @Description("Проверка невозможности обновления данных без токена авторизации")
+    public void updateWithoutAuthTest() {
+        UserModel updatedUser = new UserModel(
+                UserGenerator.generateUniqueEmail(),
+                UserGenerator.generateRandomPassword(),
+                UserGenerator.generateRandomName()
+        );
+
+        Steps.updateUser("", updatedUser)
                 .then()
-                .statusCode(401)
+                .statusCode(HttpStatus.SC_UNAUTHORIZED)
                 .body("message", equalTo(Constants.USER_NOTAUTHORISED_ERROR));
     }
 
     @Test
-    @Step("Попытка обновления email пользователя без авторизации")
-    @Description("Попытка обновления email пользователя без авторизации")
-    public void updateEmailWithoutAuthTest() {
-        String newEmail = UserGenerator.generateUniqueEmail();
-        Steps.updateUser(null, null, newEmail, null)
-                .then()
-                .statusCode(401)
-                .body("message", equalTo(Constants.USER_NOTAUTHORISED_ERROR));
-    }
-
-    @Test
-    @Step("Попытка обновления пароля пользователя без авторизации")
-    @Description("Попытка обновления пароля пользователя без авторизации")
-    public void updatePasswordWithoutAuthTest() {
-        Steps.updateUser(null, null, null, "newPassword123")
-                .then()
-                .statusCode(401)
-                .body("message", equalTo(Constants.USER_NOTAUTHORISED_ERROR));
-    }
-    @Test
-    @Step("Попытка изменить email на уже зарегистрированный")
-    @Description("Попытка изменить email на уже зарегистрированный")
+    @DisplayName("Попытка обновить email на уже зарегистрированный")
+    @Description("Проверка ошибки при попытке изменить email на уже существующий")
     public void updateUserEmailToExistingOneTest() {
         // Регистрация второго пользователя
-        String existingEmail = UserGenerator.generateUniqueEmail();
-        Response secondUser = Steps.registerNewUser(existingEmail, password, "SecondUser");
-        secondUser.then().statusCode(200);
+        UserModel secondUser = UserGenerator.generateRandomUser();
+        Steps.registerNewUser(secondUser).then().statusCode(HttpStatus.SC_OK);
 
-        // Попытка обновить email текущего пользователя на существующий
-        Steps.updateUser(token, null, existingEmail, null)
+        // Попытка обновить email первого пользователя на email второго
+        UserModel updatedUser = new UserModel(
+                secondUser.getEmail(),
+                null,
+                null
+        );
+
+        Steps.updateUser(token, updatedUser)
                 .then()
-                .statusCode(403)
+                .statusCode(HttpStatus.SC_FORBIDDEN)
                 .body("message", equalTo(Constants.USER_ALREADY_EXISTS_ERROR));
     }
-
-
 }
+
+
+
 
 

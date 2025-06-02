@@ -1,74 +1,80 @@
 package user;
 
-import io.qameta.allure.Step;
 import io.qameta.allure.Description;
+import io.qameta.allure.junit4.DisplayName;
 import io.restassured.response.Response;
+import org.apache.http.HttpStatus;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-import utils.Constants;
-import utils.UserGenerator;
-import utils.Steps;
+import utils.*;
 
 import static org.hamcrest.Matchers.*;
 
 public class UserLoginTest {
 
-    private String email;
-    private final String password = Constants.DEFAULT_USER_PASSWORD;
+    private UserModel user;
     private String token;
 
     @Before
-    @Step("Получение токена")
-    @Description("Получение токена")
     public void setUp() {
-        email = UserGenerator.generateUniqueEmail();
-        String name = Constants.USER_NAME;
-        Response response = Steps.registerNewUser(email, password, name);
-        response.then().statusCode(200);
-        token = response.path("accessToken").toString().replace("Bearer ", "");
+        user = UserGenerator.generateRandomUser();
+        Steps.registerNewUser(user).then().statusCode(HttpStatus.SC_OK);
+        token = TokenManager.getToken(user);
     }
 
     @After
-    @Step("Удаление пользователя после теста")
-    @Description("Удаление пользователя после теста")
-    public void cleanUp() {
+    public void tearDown() {
         if (token != null) {
             Steps.deleteUser(token);
         }
     }
 
     @Test
-    @Step("Успешный логин с валидными данными")
-    @Description("Успешный логин с валидными данными")
-    public void loginWithValidCredentials() {
-        Steps.loginUser(email, password)
-                .then()
-                .statusCode(200)
-                .body("success", equalTo(true))
-                .body("accessToken", notNullValue());
+    @DisplayName("Успешная авторизация с валидными данными")
+    @Description("Проверка успешной авторизации пользователя с корректными email и паролем")
+    public void loginWithValidData() {
+        Response response = Steps.loginUser(user);
+        response.then()
+                .statusCode(HttpStatus.SC_OK)
+                .body("accessToken", notNullValue())
+                .body("success", equalTo(true));
     }
 
     @Test
-    @Step("Логин с невалидным email")
-    @Description("Логин с невалидным email")
+    @DisplayName("Авторизация с невалидным email")
+    @Description("Проверка ошибки авторизации при использовании невалидного email")
     public void loginWithInvalidEmail() {
-        Steps.loginUser("invalid" + email, password)
+        UserModel invalidEmailUser = new UserModel(
+                "invalid" + user.getEmail(),
+                user.getPassword(),
+                user.getName()
+        );
+        Steps.loginUser(invalidEmailUser)
                 .then()
-                .statusCode(401)
+                .statusCode(HttpStatus.SC_UNAUTHORIZED)
                 .body("message", equalTo(Constants.INVALID_CREDENTIALS_ERROR));
     }
 
     @Test
-    @Step("Логин с невалидным паролем")
-    @Description("Логин с невалидным паролем")
+    @DisplayName("Авторизация с невалидным паролем")
+    @Description("Проверка ошибки авторизации при использовании невалидного пароля")
     public void loginWithInvalidPassword() {
-        Steps.loginUser(email, "wrongPassword")
+        UserModel invalidPasswordUser = new UserModel(
+                user.getEmail(),
+                "wrongPassword123",
+                user.getName()
+        );
+        Steps.loginUser(invalidPasswordUser)
                 .then()
-                .statusCode(401)
+                .statusCode(HttpStatus.SC_UNAUTHORIZED)
                 .body("message", equalTo(Constants.INVALID_CREDENTIALS_ERROR));
     }
 }
+
+
+
+
 
 
 

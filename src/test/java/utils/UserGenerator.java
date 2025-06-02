@@ -1,13 +1,33 @@
 package utils;
 
-import java.util.UUID;
+import com.github.javafaker.Faker;
 
 public class UserGenerator {
+    private static final Faker faker = new Faker();
 
-    // Метод для генерации уникального email
     public static String generateUniqueEmail() {
-        return "user_" + UUID.randomUUID() + "@yandex.com";
+        return faker.internet().emailAddress();
+    }
+
+    public static String generateRandomPassword() {
+        return faker.internet().password(8, 16);
+    }
+
+    public static String generateRandomName() {
+        return faker.name().firstName();
+    }
+
+    // Генерация полного пользователя
+    public static UserModel generateRandomUser() {
+        return new UserModel(
+                generateUniqueEmail(),
+                generateRandomPassword(),
+                generateRandomName()
+        );
     }
 }
+
+
+
 
 

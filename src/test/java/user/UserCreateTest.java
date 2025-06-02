@@ -1,76 +1,109 @@
 package user;
 
-import io.qameta.allure.Step;
 import io.qameta.allure.Description;
+import io.qameta.allure.junit4.DisplayName;
 import io.restassured.response.Response;
+import org.apache.http.HttpStatus;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-import utils.Constants;
-import utils.UserGenerator;
-import utils.Steps;
+import utils.*;
 
-import static org.hamcrest.Matchers.*;
+import static org.hamcrest.Matchers.equalTo;
 
 public class UserCreateTest {
 
-    private String uniqueEmail;
-    private final String userPassword = Constants.DEFAULT_USER_PASSWORD;
-    private final String userName = Constants.USER_NAME;
     private String token;
+    private UserModel existingUser;
 
     @Before
-    @Step("Получение токена")
-    @Description("Получение токена")
     public void setUp() {
-        uniqueEmail = UserGenerator.generateUniqueEmail();
-        Response response = Steps.registerNewUser(uniqueEmail, userPassword, userName);
-        response.then().statusCode(200);
-        token = response.path("accessToken").toString().replace("Bearer ", "");
+        // Создаем существующего пользователя с генераторами
+        existingUser = new UserModel(
+                UserGenerator.generateUniqueEmail(),
+                UserGenerator.generateRandomPassword(),
+                UserGenerator.generateRandomName()
+        );
+
+        Response response = Steps.registerNewUser(existingUser);
+        response.then().statusCode(HttpStatus.SC_OK);
+        token = response.then().extract().path("accessToken").toString().split(" ")[1];
     }
 
     @After
-    @Step("Удаление пользователя после теста")
-    @Description("Удаление пользователя после теста")
-    public void cleanUp() {
+    public void tearDown() {
         if (token != null) {
             Steps.deleteUser(token);
         }
     }
 
     @Test
-    @Step("Тест создания уникального пользователя")
-    @Description("Тест создания уникального пользователя")
-    public void createUniqueUserTest() {
-        String newEmail = UserGenerator.generateUniqueEmail();
-        Steps.registerNewUser(newEmail, userPassword, userName)
+    @DisplayName("Создание пользователя с валидными данными")
+    @Description("Проверка успешного создания пользователя с автоматически сгенерированными корректными данными")
+    public void createUserWithValidData() {
+        UserModel newUser = new UserModel(
+                UserGenerator.generateUniqueEmail(),
+                UserGenerator.generateRandomPassword(),
+                UserGenerator.generateRandomName()
+        );
+
+        Steps.registerNewUser(newUser)
                 .then()
-                .statusCode(200)
+                .statusCode(HttpStatus.SC_OK)
                 .body("success", equalTo(true));
     }
 
     @Test
-    @Step("Тест создания уже зарегистрированного пользователя")
-    @Description("Тест создания уже зарегистрированного пользователя")
-    public void createAlreadyRegisteredUserTest() {
-        Steps.registerNewUser(uniqueEmail, userPassword, userName)
+    @DisplayName("Создание пользователя с уже зарегистрированным email")
+    @Description("Проверка ошибки при создании пользователя с существующим email")
+    public void createUserWithExistingEmail() {
+        Steps.registerNewUser(existingUser)
                 .then()
-                .statusCode(403)
+                .statusCode(HttpStatus.SC_FORBIDDEN)
                 .body("message", equalTo(Constants.USER_EXISTS_ERROR));
     }
 
     @Test
-    @Step("Тест создания пользователя с отсутствующим обязательным полем")
-    @Description("Тест создания пользователя с отсутствующим обязательным полем")
-    public void createUserMissingRequiredFieldTest() {
-        String newEmail = UserGenerator.generateUniqueEmail(); // Генерация нового уникального email
-        Steps.registerNewUser(newEmail, userPassword, "")
+    @DisplayName("Создание пользователя без email")
+    @Description("Проверка ошибки при создании пользователя без email")
+    public void createUserWithoutEmail() {
+        UserModel user = new UserModel(null, UserGenerator.generateRandomPassword(), UserGenerator.generateRandomName());
+        Steps.registerNewUser(user)
                 .then()
-                .statusCode(403)
+                .statusCode(HttpStatus.SC_FORBIDDEN)
                 .body("message", equalTo(Constants.EMPTY_FIELDS_ERROR));
     }
 
+    @Test
+    @DisplayName("Создание пользователя без пароля")
+    @Description("Проверка ошибки при создании пользователя без пароля")
+    public void createUserWithoutPassword() {
+        UserModel user = new UserModel(UserGenerator.generateUniqueEmail(), "", UserGenerator.generateRandomName());
+        Steps.registerNewUser(user)
+                .then()
+                .statusCode(HttpStatus.SC_FORBIDDEN)
+                .body("message", equalTo(Constants.EMPTY_FIELDS_ERROR));
+    }
+
+    @Test
+    @DisplayName("Создание пользователя без имени")
+    @Description("Проверка ошибки при создании пользователя без имени")
+    public void createUserWithoutName() {
+        UserModel user = new UserModel(UserGenerator.generateUniqueEmail(), UserGenerator.generateRandomPassword(), "");
+        Steps.registerNewUser(user)
+                .then()
+                .statusCode(HttpStatus.SC_FORBIDDEN)
+                .body("message", equalTo(Constants.EMPTY_FIELDS_ERROR));
+
+    }
 }
+
+
+
+
+
+
+
 
 
 

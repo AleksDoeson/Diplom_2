@@ -1,68 +1,100 @@
 package order;
 
 import io.qameta.allure.Description;
-import io.qameta.allure.Step;
+import io.qameta.allure.junit4.DisplayName;
 import io.restassured.response.Response;
+import org.apache.http.HttpStatus;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-import utils.Constants;
-import utils.Steps;
-import utils.TokenManager;
-import utils.UserGenerator;
+import utils.*;
 
-import static io.restassured.RestAssured.*;
-import static org.hamcrest.Matchers.*;
+import java.util.Arrays;
+import java.util.List;
+
+import static org.hamcrest.Matchers.empty;
+import static org.hamcrest.Matchers.greaterThan;
+import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.notNullValue;
+import static org.hamcrest.Matchers.equalTo;
+
 
 public class OrderUserHistoryTest {
 
     private String token;
-    private String email;
-    private final String password = Constants.DEFAULT_USER_PASSWORD;
 
     @Before
-    @Step("Получение токена")
-    @Description("Получение токена")
     public void setUp() {
-        email = UserGenerator.generateUniqueEmail();
-        String name = Constants.USER_NAME;
-        Response response = Steps.registerNewUser(email, password, name);
-        response.then().statusCode(200);
-        token = response.path("accessToken").toString().replace("Bearer ", "");
+        String email = UserGenerator.generateUniqueEmail();
+        String password = UserGenerator.generateRandomPassword();
+        String name = UserGenerator.generateRandomName();
+
+        UserModel user = new UserModel(email, password, name);
+        Response response = Steps.registerNewUser(user);
+        response.then().statusCode(HttpStatus.SC_OK);
+        token = response.then().extract().path("accessToken").toString().split(" ")[1];
+
+        // Создаем заказ, чтобы у пользователя была история
+        List<String> ingredients = Arrays.asList("61c0c5a71d1f82001bdaaa6d");
+        Steps.createOrder(token, new OrderModel(ingredients));
     }
 
     @After
-    @Step("Удаление пользователя после теста")
-    @Description("Удаление пользователя после теста")
-    public void cleanUp() {
+    public void tearDown() {
         if (token != null) {
             Steps.deleteUser(token);
         }
     }
 
     @Test
-    @Step("Получение заказов с авторизацией")
-    @Description("Получение заказов с авторизацией")
+    @DisplayName("Получение истории заказов авторизованного пользователя")
+    @Description("Проверка успешного получения истории заказов авторизованного пользователя")
     public void getOrdersWithAuthTest() {
-        given()
-                .header("Authorization", "Bearer " + token)
-                .when()
-                .get("https://stellarburgers.nomoreparties.site/api/orders")
-                .then()
-                .statusCode(200)
-                .body("success", equalTo(true));
+        Response response = Steps.getOrders(token);
+        response.then()
+                .statusCode(HttpStatus.SC_OK)
+                .body("success", equalTo(true))
+                .body("orders", notNullValue())
+                .body("orders.size()", greaterThan(0)); // Убедимся, что история не пуста
     }
 
     @Test
-    @Step("Попытка получения заказов без авторизации")
-    @Description("Попытка получения заказов без авторизации")
+    @DisplayName("Попытка получения истории заказов без авторизации")
+    @Description("Проверка, что без токена возвращается ошибка 401 Unauthorized")
     public void getOrdersWithoutAuthTest() {
-        given()
-                .when()
-                .get("https://stellarburgers.nomoreparties.site/api/orders")
-                .then()
-                .statusCode(401)
+        Response response = Steps.getOrders("");
+        response.then()
+                .statusCode(HttpStatus.SC_UNAUTHORIZED)
                 .body("message", equalTo(Constants.USER_NOTAUTHORISED_ERROR));
     }
+
+    @Test
+    @DisplayName("Получение истории заказов у нового пользователя без заказов")
+    @Description("Проверка, что у нового пользователя без созданных заказов возвращается пустой список")
+    public void getOrdersEmptyHistoryTest() {
+        // Создаем нового пользователя без заказов
+        String email = UserGenerator.generateUniqueEmail();
+        String password = UserGenerator.generateRandomPassword();
+        String name = UserGenerator.generateRandomName();
+
+        UserModel newUser = new UserModel(email, password, name);
+        Response registerResp = Steps.registerNewUser(newUser);
+        registerResp.then().statusCode(HttpStatus.SC_OK);
+        String newUserToken = registerResp.then().extract().path("accessToken").toString().split(" ")[1];
+
+        // Запрос истории заказов для нового пользователя
+        Response response = Steps.getOrders(newUserToken);
+        response.then()
+                .statusCode(HttpStatus.SC_OK)
+                .body("success", equalTo(true))
+                .body("orders", is(empty()));
+
+        // Удаляем созданного нового пользователя
+        Steps.deleteUser(newUserToken);
+    }
 }
+
+
+
+
 
